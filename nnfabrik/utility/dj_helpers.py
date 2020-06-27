@@ -194,9 +194,8 @@ def gitlog(repos=()):
         return cls
         
     return gitlog_wrapper
-
-
-def create_param_expansion(f_name, container_table, fn_field=None, config_field=None, resolver=None, suffix='Param', default_to_str=False):
+        
+def create_param_expansion(f_name, container_table, fn_field=None, config_field=None, resolver=None, suffix='Param', default_to_str=False, default_var_types=None):
     """
     Given a function name `f_name` as would be found in the `container_table` class, this will create
     a new DataJoint computed table subclass with the correct definition to expand blobs corresponding to
@@ -226,7 +225,7 @@ def create_param_expansion(f_name, container_table, fn_field=None, config_field=
     resolver = resolver or (lambda x: container_table.resolve_fn(x))
     f = resolver(f_name)
 
-    def_str = make_definition(f, default_to_str=default_to_str)
+    def_str = make_definition(f, default_to_str=default_to_str, default_var_types=default_var_types)
 
     class NewTable(dj.Computed):
         definition = """
@@ -247,13 +246,18 @@ def create_param_expansion(f_name, container_table, fn_field=None, config_field=
                 for k,v in key.items():
                     if type(v) in [list, tuple]:
                         key[k]=str(v)
+            if default_var_types is not None:
+                for k,v in key.items():
+                    if k in default_var_types:
+                        key[k]=default_var_types[k](v)
+                
             self.insert1(key, ignore_extra_fields=True)
 
     NewTable.__name__ = to_camel_case(f.__name__) + suffix
     return NewTable
 
 
-def make_definition(f, exclude=('model', 'dataloaders', 'seed'), default_to_str=False):
+def make_definition(f, exclude=('model', 'dataloaders', 'seed'), default_to_str=False, default_var_types=None):
     """
     Given a function `f`, creates a table definition string to house all arguments. The types
     of the arguments are inferred from (1) type annotation and (2) type of the default value if present,
@@ -295,7 +299,13 @@ def make_definition(f, exclude=('model', 'dataloaders', 'seed'), default_to_str=
                 else:
                     t = object
         else:
+            
             t = object
+            
+        if default_var_types is not None:
+            if v in default_var_types:
+                t = default_var_types[v]
+                
         field = type_lut.get(t, 'longblob')  # default to longblob if no match found
         # if boolean field, turn default value into an integer
         if field == 'bool' and v in def_lut:
@@ -320,3 +330,4 @@ class CustomSchema(Schema):
                     WrappedPartTable.__name__ = attr
                     setattr(cls, attr, WrappedPartTable)
             return super().__call__(cls, context=context)
+        
