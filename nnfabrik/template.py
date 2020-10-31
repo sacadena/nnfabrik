@@ -210,6 +210,10 @@ class TrainedModelBase(dj.Computed):
                     "Make sure to have an The 'model_fn' also has to be able to"
                     "accept 'data_info' as an input arg, and use that over the dataloader to build the model."
                 )
+                
+            ret = get_all_parts(**config_dict, seed=seed)
+            return ret[1:] if include_trainer else ret[1]
+        
         return get_all_parts(**config_dict, seed=seed)
 
     def call_back(self, uid=None, epoch=None, model=None, info=None):
